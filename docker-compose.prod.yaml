@@ -81,8 +81,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
     restart: unless-stopped
     depends_on:
-      talawa-api:
-        condition: service_healthy
+      - talawa-api
     networks:
       - talawa-network
 
