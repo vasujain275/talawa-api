@@ -1,57 +1,86 @@
-version: "3.8"
 services:
   mongodb:
     image: mongo:latest
     ports:
-      - 27017:27017
+      - "27017:27017"
     volumes:
       - mongodb-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: mongosh --eval "db.runCommand('ping').ok"
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - talawa-network
+
   redis-stack-server:
     image: redis/redis-stack-server:latest
     ports:
-      - 6379:6379
+      - "6379:6379"
     volumes:
       - redis-data:/data/redis
+    restart: unless-stopped
+    healthcheck:
+      test: redis-cli ping
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - talawa-network
+
   minio:
     image: minio/minio
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: mc ready local
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - talawa-network
-  talawa-api-prod-container:
+
+  talawa-api:
     build:
       context: .
       dockerfile: Dockerfile.prod
     ports:
-      - 4000:4000
+      - "4000:4000"
     depends_on:
-      - mongodb
-      - redis-stack-server
-      - minio
+      mongodb:
+        condition: service_healthy
+      redis-stack-server:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
-      - MONGO_DB_URL=mongodb://mongodb:27017
-      - REDIS_HOST=redis-stack-server
-      - REDIS_PORT=6379
-      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      MONGO_DB_URL: mongodb://mongodb:27017/talawa-api
+      REDIS_HOST: redis-stack-server
+      REDIS_PORT: 6379
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      NODE_ENV: production
+    restart: unless-stopped
     networks:
       - talawa-network
 
 volumes:
   mongodb-data:
+    name: talawa-mongodb-data
   redis-data:
+    name: talawa-redis-data
   minio-data:
+    name: talawa-minio-data
 
 networks:
   talawa-network:
+    name: talawa-network
     driver: bridge

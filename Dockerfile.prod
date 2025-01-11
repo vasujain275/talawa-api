@@ -1,25 +1,60 @@
-# Stage 1: Install Dependencies and Build
-FROM node:lts AS builder
+# Build stage
+FROM node:22.12.0-slim AS builder
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
 
-RUN npm install -g npm@latest && npm install && rm -rf ./package-lock.json
+# Install dependencies
+RUN npm ci
 
+# Build stage
+FROM node:22.12.0-slim AS builder
+
+WORKDIR /app
+
+# Install OpenSSL
+RUN apt-get update && \
+    apt-get install -y openssl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code and locale files
 COPY . .
 
-RUN npm run build
+# Create certs directory
+RUN mkdir -p certs
 
-# Stage 2: Final image
-FROM node:alpine
+# Generate SSL certificates
+RUN npm run generate:ssl-private-key
 
-WORKDIR /usr/src/app
+# Run prebuild and build scripts
+RUN npm run prebuild && npm run build
 
-COPY --from=builder /usr/src/app/package.json ./
-COPY --from=builder /usr/src/app/node_modules ./node_modules
-COPY --from=builder /usr/src/app/build ./build
+# Runtime stage
+FROM node:22.12.0-alpine
 
+WORKDIR /app
+
+# Install PM2 globally in the runtime image
+RUN npm install pm2 -g
+
+# Copy necessary files from builder
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/locales ./locales
+# Copy SSL certificates
+COPY --from=builder /app/certs ./certs
+
+# Expose API port
 EXPOSE 4000
 
-CMD ["npm", "start"]
+# Start the application using the prod script which uses PM2
+CMD ["npm", "run", "prod"]
