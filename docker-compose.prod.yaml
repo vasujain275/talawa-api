@@ -72,6 +72,20 @@ services:
     networks:
       - talawa-network
 
+  caddy:
+    image: caddy:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    restart: unless-stopped
+    depends_on:
+      talawa-api:
+        condition: service_healthy
+    networks:
+      - talawa-network
+
 volumes:
   mongodb-data:
     name: talawa-mongodb-data
