@@ -1,3 +1,9 @@
 api-demo.talawa.io {
-  reverse_proxy talawa-api:4000
+  reverse_proxy https://talawa-api:4000 {
+    transport http {
+      tls
+    }
+  }
+
+  tls internal
 }
